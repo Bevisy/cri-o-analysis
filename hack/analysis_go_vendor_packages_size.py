@@ -80,14 +80,29 @@ def process_package(package_path, results, visited, mib=False):
             size = round(size / (1024 * 1024), 1)
         results.append((package_path.replace("./vendor/", ""), size))
 
+# summarize the results by the first N parts of the package path
+def summarize_results(results, sum):
+    summarized_results = {}
+    for dep, size in results:
+        parts = dep.split('/')
+        if len(parts) >= sum:
+            dep = '/'.join(parts[:sum])
+        if dep in summarized_results:
+            # avoid precision problems caused by floating-point number addition
+            summarized_results[dep] = round( summarized_results[dep] + size, 1)
+        else:
+            summarized_results[dep] = size
+    return list(summarized_results.items())
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--mib", help="display size in MiB", action="store_true")
     parser.add_argument("-sort", help="sort results by size in descending order", action="store_true")
     parser.add_argument("-csv", help="write results to a CSV file", action="store_true")
     parser.add_argument("-d", "--debug", help="enable debug information", action="store_true")
-    parser.add_argument("-top", type=int, default=100, help='Only print/write the top N lines')
+    parser.add_argument("-top", type=int, help='Only print/write the top N lines')
     parser.add_argument("-o", "--out", type=str , default="vendor_packages_size.csv", help='Output csv file name')
+    parser.add_argument('-sum', type=int, help='Summarize the sizes by the first N parts of the package path')
     args = parser.parse_args()
 
     if args.debug:
@@ -104,10 +119,13 @@ def main():
         logging.debug(f'Processing {dep}:')
         process_package(dep, results, visited, args.mib)
 
+    if args.sum:
+        results = summarize_results(results, args.sum)
+
     if args.sort or args.top:
         results.sort(key=lambda x: x[1], reverse=True)
 
-    if args.top:
+    if args.top is not None:
         results = results[:args.top]
 
     if args.csv:
